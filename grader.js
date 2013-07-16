@@ -30,18 +30,11 @@ var HTMLFILE_DEFAULT = "index.html";
 var CHECKSFILE_DEFAULT = "checks.json";
 var HTMLURL_DEFAULT="http://evening-springs-9625.herokuapp.com/"
 
-var exitWithMessage = function(fn) {
-    fn();
-    process.exit(1);
-    return null;
-}
-
 var assertFileExists = function(infile) {
     var instr = infile.toString();
     if(!fs.existsSync(instr)) {
-	exitWithMessage(function(){console.log("%s does not exist. Exiting.", instr);});
-        // console.log("%s does not exist. Exiting.", instr);
-        // process.exit(1); // http://nodejs.org/api/process.html#process_process_exit_code
+        console.log("%s does not exist. Exiting.", instr);
+        process.exit(1); // http://nodejs.org/api/process.html#process_process_exit_code
     }
     return instr;
 };
@@ -66,8 +59,6 @@ var checkHtmlFile = function(htmlfile, checksfile) {
 };
 
 var checkHtmlBuffer = function(buffer, checksfile) {
-    // buffer = new Buffer(fs.readFileSync(file), 'utf-8');
-    // $ = cheerioHtmlFile(htmlfile);
     if (buffer) {
         $ = cheerio.load(buffer.toString());
         var checks = loadChecks(checksfile).sort();
@@ -76,19 +67,10 @@ var checkHtmlBuffer = function(buffer, checksfile) {
             var present = $(checks[ii]).length > 0;
             out[checks[ii]] = present;
         }
-	return out;
+
+        return out;
     }
 }
-
-var loadFile = function(file, buffer) {
-    if (file) {
-	buffer = new Buffer(fs.readFileSync(file), 'utf-8');
-	// buffer = fs.readFileSync();
-    }
-};
-
-var loadUrl = function() {
-};
 
 var clone = function(fn) {
     // Workaround for commander.js issue.
@@ -96,58 +78,54 @@ var clone = function(fn) {
     return fn.bind({});
 };
 
-var buildfn = function(callback, checks) {
+var buildfn = function(callback) {
     var response2buffer = function(result, response) {
         if (result instanceof Error) {
             console.error('Error: ' + util.format(response.message));
         } else {
-	    checkJson = callback(new Buffer(result, 'utf-8'), checks);
-            // console.error("Wrote %s", csvfile);
-            // fs.writeFileSync(csvfile, result);
-            // csv2console(csvfile, headers);
-	    outJson = JSON.stringify(checkJson, null, 4);
-	    console.log(outJson);
+	    callback(new Buffer(result, 'utf-8'));
         }
     };
     return response2buffer;
 };
 
 
-var loadHtml = function(file, url, callback, checks) {
-//    console.log('file : %j', file);
-//    console.log('url  : %j', url);
+var loadHtml = function(file, url, callback) {
     if (url) {
-//	console.log('Using url');
-	rest.get(url).on('complete', buildfn(callback, checks));
+	rest.get(url).on('complete', buildfn(callback));
     } else if (file) {
-// 	console.log('Using file');
-	checkJson = callback(new Buffer(fs.readFileSync(file), 'utf-8'), checks);
-	outJson = JSON.stringify(checkJson, null, 4);
-	console.log(outJson);
+	callback(new Buffer(fs.readFileSync(file), 'utf-8'));
     } else {
 	console.log('file or url has to be provided!');
     }
 }
 
+var gen = function(param) {
+    var rez = function(buffer) {
+	return checkHtmlBuffer(buffer, param);
+    }
+    return rez;
+};
+
 if(require.main == module) {
-    var buffer;
+    
+    // parse command line input into program variables
     program
-//         .option('-c, --checks <check_file>', 'Path to checks.json', clone(assertFileExists), CHECKSFILE_DEFAULT)
-        .option('-c, --checks <check_file>', 'Path to checks.json', clone(assertFileExists))
+	.option('-c, --checks <check_file>', 'Path to checks.json', clone(assertFileExists), CHECKSFILE_DEFAULT)
         .option('-f, --file <html_file>', 'Path to index.html', null)
 	.option('-u, --url <html_url>', 'URL to html file', null)
         .parse(process.argv);
-    // var checkJson = checkHtmlBuffer(buffer, program.checks);
-    // var buffer = 
-    loadHtml(program.file, program.url, checkHtmlBuffer, program.checks);
-    // if (buffer && buffer.length > 0) {
-//	console.log('buffer lenght: %j',  buffer.length);
-    // } else {
-    //    console.log('buffer empty');
-    // }
-//    var checkJson = checkHtmlBuffer(buffer, program.checks);
-//    var outJson = JSON.stringify(checkJson, null, 4);
-//    console.log(outJson);
+
+    // callback which checks buffer against checks file and prints it out
+    var callback = function(buffer) {
+	checkJson = checkHtmlBuffer(buffer, program.checks);
+	outJson = JSON.stringify(checkJson, null, 4);
+	console.log(outJson);
+    };
+
+    // load url or file in buffer anc invoke callback
+    loadHtml(program.file, program.url, callback);
+
 } else {
     exports.checkHtmlFile = checkHtmlFile;
 }
